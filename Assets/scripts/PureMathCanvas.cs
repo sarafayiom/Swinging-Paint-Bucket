@@ -1,0 +1,234 @@
+using UnityEngine;
+
+[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
+public class PureMathCanvas : MonoBehaviour
+{
+    [Header("Procedural Mesh Settings")]
+    public int gridResolutionX = 20; // ⁄œœ «· ﬁ”Ì„«  «·Â‰œ”Ì… ⁄—÷«
+    public int gridResolutionZ = 20; // ⁄œœ «· ﬁ”Ì„«  «·Â‰œ”Ì… ÿÊ·«
+    public float canvasWidth = 5f;   // «·⁄—÷ «·›⁄·Ì ··ÊÕ… ›Ì «·⁄«·„
+    public float canvasHeight = 5f;  // «·ÿÊ· «·›⁄·Ì ··ÊÕ… ›Ì «·⁄«·„
+
+    [Header("Texture Resolution")]
+    public int textureWidth = 1024;
+    public int textureHeight = 1024;
+
+    [Header("Surface Physics")]
+    [Tooltip("Options: Paper, Metal")]
+    public string surfaceType = "Paper";
+
+    // „’›Ê›«  «·»‰Ì… «·Â‰œ”Ì… (Mesh)
+    private Mesh proceduralMesh;
+    private Vector3[] vertices;
+    private int[] triangles;
+    private Vector2[] uvs;
+
+    // „’›Ê›«  ‰”ÌÃ «·—”„ Ê«·√·Ê«‰ Ê«·ÿ»ﬁ« 
+    private Texture2D canvasTexture;
+    private Color[] blankPixels;
+    private float[] pixelWetnessMap;
+    private float dryingSpeed = 0.08f;
+
+    void Start()
+    {
+        // 1. »‰«¡ «·‘ﬂ· «·Â‰œ”Ì ··ÊÕ… „‰ «·’›— »«·—Ì«÷Ì«  („À· «·Õ»·  „«„«)
+        BuildProceduralGrid();
+
+        // 2. ≈‰‘«¡ ‰”ÌÃ »ﬂ”·«  «·—”„ »—„ÃÌ«
+        InitializeTexture();
+    }
+
+    void Update()
+    {
+        // „Õ«ﬂ«… Ã›«› «·ÿ·«¡ Ê »Œ— «·—ÿÊ»… ⁄»— «·Êﬁ 
+        for (int i = 0; i < pixelWetnessMap.Length; i++)
+        {
+            if (pixelWetnessMap[i] > 0f)
+            {
+                pixelWetnessMap[i] -= dryingSpeed * Time.deltaTime;
+                if (pixelWetnessMap[i] < 0f) pixelWetnessMap[i] = 0f;
+            }
+        }
+    }
+
+    /// <summary>
+    /// ŒÊ«—“„Ì…  Ê·Ìœ ‘»ﬂ… «·„—»⁄«  Ê«·„À·À«  »—„ÃÌ« »œÊ‰ √Ì „Ã”„ Ã«Â“
+    /// </summary>
+    void BuildProceduralGrid()
+    {
+        proceduralMesh = new Mesh();
+        proceduralMesh.name = "PureMathCanvas_Mesh";
+
+        int vCount = (gridResolutionX + 1) * (gridResolutionZ + 1);
+        vertices = new Vector3[vCount];
+        uvs = new Vector2[vCount];
+        triangles = new int[gridResolutionX * gridResolutionZ * 6];
+
+        float dx = canvasWidth / gridResolutionX;
+        float dz = canvasHeight / gridResolutionZ;
+
+        //  Ê·Ìœ «·‰ﬁ«ÿ (Vertices) Ê«·≈Õœ«ÀÌ«  «·‰”»Ì… (UVs)
+        int v = 0;
+        for (int z = 0; z <= gridResolutionZ; z++)
+        {
+            for (int x = 0; x <= gridResolutionX; x++)
+            {
+                // Õ”«» „Êﬁ⁄ «·‰ﬁÿ… »—„ÃÌ« »ÕÌÀ ÌﬂÊ‰ „—ﬂ“ «··ÊÕ… ÂÊ «·‹ (0,0,0) «·„Õ·Ì
+                float posX = (x * dx) - (canvasWidth / 2f);
+                float posZ = (z * dz) - (canvasHeight / 2f);
+
+                vertices[v] = new Vector3(posX, 0f, posZ);
+
+                // —»ÿ ≈Õœ«ÀÌ«  «·‹ UV („Â„… Ãœ« ·ﬂÌ Ì›Â„ ﬂÊœ «·—”„ √Ì‰  ﬁ⁄ «·»ﬂ”·« )
+                uvs[v] = new Vector2((float)x / gridResolutionX, (float)z / gridResolutionZ);
+                v++;
+            }
+        }
+
+        //  Ê·Ìœ «·„À·À«  (Triangles) · Ê’Ì· «·‰ﬁ«ÿ »»⁄÷Â« (ﬂ· „—»⁄ Ì ﬂÊ‰ „‰ „À·ÀÌ‰)
+        int t = 0;
+        for (int z = 0; z < gridResolutionZ; z++)
+        {
+            for (int x = 0; x < gridResolutionX; x++)
+            {
+                int row1 = z * (gridResolutionX + 1) + x;
+                int row2 = (z + 1) * (gridResolutionX + 1) + x;
+
+                // «·„À·À «·√Ê·
+                triangles[t++] = row1;
+                triangles[t++] = row2;
+                triangles[t++] = row1 + 1;
+
+                // «·„À·À «·À«‰Ì
+                triangles[t++] = row1 + 1;
+                triangles[t++] = row2;
+                triangles[t++] = row2 + 1;
+            }
+        }
+
+        //  ⁄ÌÌ‰ «·»Ì«‰«  «·„»—„Ã… ··„‘ «·„Œ’’
+        proceduralMesh.vertices = vertices;
+        proceduralMesh.triangles = triangles;
+        proceduralMesh.uv = uvs;
+
+        // Õ”«» «·≈÷«¡… Ê«·Ÿ·«· —Ì«÷Ì«  ·ﬁ«∆Ì« ··„Ã”„ «·ÃœÌœ
+        proceduralMesh.RecalculateNormals();
+        proceduralMesh.RecalculateBounds();
+
+        GetComponent<MeshFilter>().mesh = proceduralMesh;
+    }
+
+    void InitializeTexture()
+    {
+        canvasTexture = new Texture2D(textureWidth, textureHeight, TextureFormat.RGBA32, false);
+        blankPixels = new Color[textureWidth * textureHeight];
+        pixelWetnessMap = new float[textureWidth * textureHeight];
+
+        for (int i = 0; i < blankPixels.Length; i++)
+        {
+            blankPixels[i] = Color.white;
+            pixelWetnessMap[i] = 0f;
+        }
+
+        canvasTexture.SetPixels(blankPixels);
+        canvasTexture.Apply();
+
+        GetComponent<MeshRenderer>().material.mainTexture = canvasTexture;
+    }
+
+    /// <summary>
+    /// œ«·… ≈”ﬁ«ÿ „Êﬁ⁄ «·œ·Ê À·«ÀÌ «·√»⁄«œ ⁄·Ï «··ÊÕ… «·„’‰Ê⁄… »—„ÃÌ«
+    /// </summary>
+    public void PaintAtWorldPosition(Vector3 bucketWorldPos, float baseRadius, Color paintColor, float bucketSpeed, float fluidFlowRate)
+    {
+        //  ÕÊÌ· „Êﬁ⁄ «·œ·Ê „‰ «·⁄«·„ «·Œ«—ÃÌ ≈·Ï „”«Õ… «··ÊÕ… «·„Õ·Ì… (Local Space)
+        Vector3 localPos = transform.InverseTransformPoint(bucketWorldPos);
+
+        // Õ”«» «·‰”»… «·„⁄Ì«—Ì… („‰ 0 ≈·Ï 1) ·„Êﬁ⁄ «·œ·Ê »‰«¡ ⁄·Ï √»⁄«œ «··ÊÕ… «·»—„ÃÌ… «·„Õœœ… ÌœÊÌ«
+        float normalizedX = (localPos.x / canvasWidth) + 0.5f;
+        float normalizedZ = (localPos.z / canvasHeight) + 0.5f;
+
+        // «· Õﬁﬁ „‰ √‰ «·≈”ﬁ«ÿ «·—Ì«÷Ì Ìﬁ⁄ œ«Œ· „”«Õ… «··ÊÕ… «·‰« Ã…
+        if (normalizedX >= 0 && normalizedX <= 1 && normalizedZ >= 0 && normalizedZ <= 1)
+        {
+            int pixelX = (int)(normalizedX * textureWidth);
+            int pixelY = (int)(normalizedZ * textureHeight);
+
+            ApplyAdvancedBlending(pixelX, pixelY, baseRadius, paintColor, bucketSpeed, fluidFlowRate);
+        }
+    }
+
+    private void ApplyAdvancedBlending(int cx, int cy, float baseRadius, Color newColor, float bucketSpeed, float fluidFlowRate)
+    {
+        if (bucketSpeed < 0.1f) bucketSpeed = 0.1f;
+        float paintThickness = (1.0f / bucketSpeed) * fluidFlowRate;
+
+        int r = (int)baseRadius;
+        float absorptionSpread = 1.0f;
+
+        if (surfaceType == "Paper")
+        {
+            absorptionSpread = 1.5f;
+            r = (int)(baseRadius * absorptionSpread * (1.0f + paintThickness * 0.4f));
+        }
+        else if (surfaceType == "Metal")
+        {
+            absorptionSpread = 0.7f;
+            r = (int)(baseRadius * absorptionSpread);
+        }
+
+        int startX = Mathf.Max(0, cx - r);
+        int endX = Mathf.Min(textureWidth - 1, cx + r);
+        int startY = Mathf.Max(0, cy - r);
+        int endY = Mathf.Min(textureHeight - 1, cy + r);
+
+        bool textureChanged = false;
+
+        for (int x = startX; x <= endX; x++)
+        {
+            for (int y = startY; y <= endY; y++)
+            {
+                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r)
+                {
+                    int pixelIndex = y * textureWidth + x;
+                    Color existingColor = canvasTexture.GetPixel(x, y);
+                    Color blendedColor = existingColor;
+
+                    float currentWetness = pixelWetnessMap[pixelIndex];
+                    float dynamicBlendFactor = Mathf.Clamp01(paintThickness * (1.0f + currentWetness));
+
+                    if (existingColor == Color.white)
+                    {
+                        blendedColor = newColor;
+                    }
+                    else
+                    {
+                        if (currentWetness > 0.15f)
+                        {
+                            //  √ÀÌ— (Wet-on-Wet) «·„” ÊÕÏ „‰ «·√»Õ«À
+                            blendedColor.r = (newColor.r * dynamicBlendFactor) + (existingColor.r * (1f - dynamicBlendFactor));
+                            blendedColor.g = (newColor.g * dynamicBlendFactor) + (existingColor.g * (1f - dynamicBlendFactor));
+                            blendedColor.b = (newColor.b * dynamicBlendFactor) + (existingColor.b * (1f - dynamicBlendFactor));
+                        }
+                        else
+                        {
+                            //  √ÀÌ— (Wet-on-Dry)
+                            blendedColor = Color.Lerp(existingColor, newColor, dynamicBlendFactor);
+                        }
+                    }
+
+                    blendedColor.a = 1f;
+                    canvasTexture.SetPixel(x, y, blendedColor);
+
+                    pixelWetnessMap[pixelIndex] = 1.0f;
+                    textureChanged = true;
+                }
+            }
+        }
+
+        if (textureChanged)
+        {
+            canvasTexture.Apply(false);
+        }
+    }
+}
