@@ -1094,13 +1094,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 471a5fa9fedcabb41bac177dcf122e61, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PureMathCanvas
+  currentSurface: 0
   gridResolutionX: 60
   gridResolutionZ: 60
   canvasWidth: 35
   canvasHeight: 35
   textureWidth: 1024
   textureHeight: 1024
-  surfaceType: Paper
+  dryingSpeed: 0.08
+  paintSpreadFactor: 1
 --- !u!23 &1685853003
 MeshRenderer:
   m_ObjectHideFlags: 0
